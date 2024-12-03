@@ -5,6 +5,9 @@ from telebot import types
 API_KEY = '7253304579:AAE9Xpz41BAGzhHBSn5CUyZGCSf5AWMv6Ws'
 bot = telebot.TeleBot(API_KEY)
 
+# Dictionary to store the user's current state
+user_state = {}
+
 # Function to create main menu keyboard
 def main_menu_markup():
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=True)
@@ -74,10 +77,18 @@ def send_welcome(message):
     first_name = message.from_user.first_name
     greeting = f"Hi, {first_name}❤️\n\nHow can I help you today?"
     bot.send_message(message.chat.id, greeting, reply_markup=main_menu_markup())
+    
+    # Set the user's state to the main menu
+    user_state[message.chat.id] = 'main_menu'
 
 # Handle user response based on button clicked
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    chat_id = message.chat.id
+    
+    # Check the user's current state
+    current_state = user_state.get(chat_id, 'main_menu')  # Default to main menu if no state exists
+    
     if message.text == 'About':
         about_message = f"""
         හෙයි.! දන්නවනේ ඉතිම් මගේ නම විමර්ශනී..😇
@@ -96,7 +107,7 @@ def handle_message(message):
         තෑන්ක් යූ {message.from_user.first_name} ❤️
         """
         bot.send_message(message.chat.id, about_message, parse_mode='Markdown', reply_markup=main_menu_markup())
-
+        
     elif message.text == 'YouTube':
         bot.reply_to(message, "Share your YouTube channel link or details here.", reply_markup=main_menu_markup())
     elif message.text == 'Help':
@@ -104,14 +115,17 @@ def handle_message(message):
     elif message.text == 'Donate':
         # Send options for donation
         bot.send_message(message.chat.id, "Please select your donation method:", reply_markup=donation_markup())
+        user_state[chat_id] = 'donation'  # Update state to donation
 
     elif message.text == 'Google Video Download':
         # When Google Video Download is selected, show sub-options
         bot.reply_to(message, "Select your download option:", reply_markup=google_video_download_markup())
+        user_state[chat_id] = 'google_video'  # Update state to google_video
     
     elif message.text == 'YouTube Song Download':
         # When YouTube Song Download is selected, show sub-options
         bot.reply_to(message, "Select your download option:", reply_markup=youtube_song_download_markup())
+        user_state[chat_id] = 'youtube_song'  # Update state to youtube_song
     
     elif message.text == 'Download Audio':
         bot.reply_to(message, "Audio download selected. Please provide the video URL.", reply_markup=youtube_song_download_markup())
@@ -120,15 +134,19 @@ def handle_message(message):
         bot.reply_to(message, "MP4 download selected. Please provide the video URL.", reply_markup=youtube_song_download_markup())
     
     elif message.text == 'Back':
-        # Check the previous context to navigate correctly
-        if message.text == 'Back' and message.chat.id not in bot.context:
-            bot.send_message(message.chat.id, "Going back to the main menu...", reply_markup=main_menu_markup())
-        else:
-            bot.send_message(message.chat.id, "Going back to the donation options...", reply_markup=donation_markup())
+        if current_state == 'donation':
+            # If the user is in donation menu, go back to the main menu
+            bot.send_message(chat_id, "Going back to the main menu...", reply_markup=main_menu_markup())
+            user_state[chat_id] = 'main_menu'  # Reset to main menu state
+        elif current_state == 'google_video' or current_state == 'youtube_song':
+            # If the user is in download options, go back to the donation menu
+            bot.send_message(chat_id, "Going back to the donation options...", reply_markup=donation_markup())
+            user_state[chat_id] = 'donation'  # Reset to donation state
     
     elif message.text == 'Home':
         # Going back to the main menu
-        bot.send_message(message.chat.id, "Welcome back to the main menu!", reply_markup=main_menu_markup())
+        bot.send_message(chat_id, "Welcome back to the main menu!", reply_markup=main_menu_markup())
+        user_state[chat_id] = 'main_menu'  # Reset to main menu state
     
     else:
         bot.reply_to(message, "Invalid option. Please select from the available buttons.")
