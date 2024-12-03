@@ -1,42 +1,85 @@
-import time
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler
-from telegram.ext import CallbackContext, filters
-import yt_dlp
 import os
+import logging
+from pytube import YouTube
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
 
-TOKEN = '7088491712:AAESfWxDn2_2IFg8xYD7Aa2j9fj3sHBjzPA'
+# Initialize logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Hello! Send me a YouTube video link to download.")
+# Replace with your bot token
+TOKEN = '7253304579:AAE9Xpz41BAGzhHBSn5CUyZGCSf5AWMv6Ws'
 
-async def download_video(update: Update, context: CallbackContext):
+# Function to start the bot
+def start(update: Update, context):
+    update.message.reply_text('Welcome! Send me a YouTube link to download the video.')
+
+# Function to handle YouTube link
+def handle_message(update: Update, context):
     url = update.message.text
-    await update.message.reply_text("Downloading video... Please wait.")
-    retries = 3  # Number of retry attempts
-    for _ in range(retries):
-        try:
-            ydl_opts = {'format': 'best'}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info_dict = ydl.extract_info(url, download=False)
-                filename = ydl.prepare_filename(info_dict)
-                ydl.download([url])
+    try:
+        yt = YouTube(url)
+        streams = yt.streams.filter(progressive=True, file_extension='mp4')
+        
+        # Create a list of available resolutions
+        keyboard = [
+            [InlineKeyboardButton(f"{stream.resolution}", callback_data=stream.itag) for stream in streams]
+        ]
 
-            await update.message.reply_text(f"Download complete! Sending your video...")
-            await update.message.reply_video(open(filename, 'rb'))
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text("Choose a resolution:", reply_markup=reply_markup)
 
-            os.remove(filename)
-            break  # Break the loop if successful
+    except Exception as e:
+        update.message.reply_text(f"Error: {e}")
 
-        except Exception as e:
-            await update.message.reply_text(f"An error occurred: {str(e)}")
-            time.sleep(5)  # Wait for a few seconds before retrying
+# Callback function to handle resolution selection
+def button(update: Update, context):
+    query = update.callback_query
+    itag = query.data
+    query.answer()
 
+    try:
+        # Fetch the YouTube video stream by itag
+        yt = YouTube(query.message.text)
+        stream = yt.streams.get_by_itag(itag)
+
+        # Download the video
+        query.message.reply_text("Downloading the video, please wait...")
+        video_file = stream.download()
+
+        # Send the video file back to the user
+        query.message.reply_video(video=open(video_file, 'rb'))
+
+        # Remove the downloaded file from the server
+        os.remove(video_file)
+
+    except Exception as e:
+        query.message.reply_text(f"Error: {e}")
+
+# Error handler function
+def error(update, context):
+    logger.warning(f'Update "{update}" caused error "{context.error}"')
+
+# Main function to run the bot
 def main():
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_video))
-    application.run_polling()
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    # Add command and message handlers
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dp.add_handler(CallbackQueryHandler(button))
+
+    # Log all errors
+    dp.add_error_handler(error)
+
+    # Start the Bot
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     main()
