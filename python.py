@@ -120,8 +120,11 @@ def handle_message(message):
         bot.reply_to(message, "MP4 download selected. Please provide the video URL.", reply_markup=youtube_song_download_markup())
     
     elif message.text == 'Back':
-        # Going back to donation options
-        bot.send_message(message.chat.id, "Going back to the donation options...", reply_markup=donation_markup())
+        # Check the previous context to navigate correctly
+        if message.text == 'Back' and message.chat.id not in bot.context:
+            bot.send_message(message.chat.id, "Going back to the main menu...", reply_markup=main_menu_markup())
+        else:
+            bot.send_message(message.chat.id, "Going back to the donation options...", reply_markup=donation_markup())
     
     elif message.text == 'Home':
         # Going back to the main menu
